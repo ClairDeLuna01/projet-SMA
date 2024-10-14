@@ -16,9 +16,13 @@ import numpy as np
 from pygame.math import Vector2
 import argparse
 from emoji import EMOJI_DATA
+import struct
 
 
 import speech_recognition as sr
+from pocketsphinx import LiveSpeech
+
+from pvrecorder import PvRecorder
 
 # ALLOWED_CHARS = ascii_letters + digits + punctuation + whitespace
 
@@ -70,19 +74,19 @@ def main():
         roleTxt += "\nThe language code is " + language + "."
 
         mixer.init()
-        # p = pyaudio.PyAudio()
+        p = pyaudio.PyAudio()
 
         # for i in range(p.get_device_count()):
         # print(p.get_device_info_by_index(i))
 
-        # r = sr.Recognizer()
+        r = sr.Recognizer()
 
-        # with sr.Microphone(20) as source2:
+        # with sr.Microphone() as source2:
 
         #     # wait for a second to let the recognizer
         #     # adjust the energy threshold based on
         #     # the surrounding noise level
-        #     r.adjust_for_ambient_noise(source2, duration=1)
+        #     # r.adjust_for_ambient_noise(source2, duration=1)
 
         #     # listens for the user's input
         #     audio2 = r.listen(source2)
@@ -92,6 +96,44 @@ def main():
         #     MyText = MyText.lower()
 
         #     print("Did you say ", MyText)
+
+        # for phrase in LiveSpeech():
+        #     print(phrase)
+
+        # for index, device in enumerate(PvRecorder.get_available_devices()):
+        #     print(f"{index}: {device}")
+
+        device_index = 0
+
+        recorder = PvRecorder(device_index=device_index, frame_length=512)
+        # audio = []
+
+        # try:
+        #     recorder.start()
+
+        #     while True:
+        #         frame = recorder.read()
+        #         average = np.mean(np.abs(frame))
+        #         print(average, " "*20, end="\r")
+        #         audio.extend(frame)
+        # except KeyboardInterrupt:
+        #     recorder.stop()
+        #     print("Recorder stopped")
+
+        #     with wave.open("record.wav", 'w') as wf:
+        #         wf.setparams((1, 2, 16000, 512, "NONE", "NONE"))
+        #         wf.writeframes(struct.pack("h" * len(audio), *audio))
+
+        # with sr.AudioFile("record.wav") as source:
+        #     audio = r.record(source)
+
+        #     try:
+        #         text = r.recognize_sphinx(audio)
+        #         print("You: ", text)
+        #     except sr.UnknownValueError:
+        #         print("Could not understand the audio")
+        #     except sr.RequestError as e:
+        #         print("Could not request results; {0}".format(e))
 
         pygame.init()
 
@@ -120,11 +162,53 @@ def main():
         # clock.tick(60)
 
         while True:
+            textValid = False
+            text = ""
+            while not textValid:
+                recordDone = False
+                recordStart = False
+                audio = []
+                while not recordDone:
+                    for event in pygame.event.get():
+                        if event.type == pygame.QUIT:
+                            pygame.quit()
+                            return
+                        if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                            recordStart = True
+                            recorder.start()
+                        if event.type == pygame.KEYUP and event.key == pygame.K_SPACE and recordStart:
+                            recordDone = True
+
+                    if recordStart:
+                        frame = recorder.read()
+                        average = np.mean(np.abs(frame))
+                        print(average, " "*20, end="\r")
+                        audio.extend(frame)
+
+                recorder.stop()
+                with wave.open("record.wav", 'w') as wf:
+                    wf.setparams((1, 2, 16000, 512, "NONE", "NONE"))
+                    wf.writeframes(struct.pack("h" * len(audio), *audio))
+
+                with sr.AudioFile("record.wav") as source:
+                    audio = r.record(source)
+
+                    try:
+                        text = r.recognize_sphinx(audio)
+                        textValid = True
+                    except sr.UnknownValueError:
+                        print("Could not understand the audio, please try again")
+                    except sr.RequestError as e:
+                        print("Could not request results; {0}".format(e))
+                        return
+
+            print("You: ", text)
+            # return
             stream = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": roleTxt},
-                    {"role": "user", "content": input("You: ")},
+                    {"role": "user", "content": text},
                 ],
                 max_tokens=5000,
                 stream=True
