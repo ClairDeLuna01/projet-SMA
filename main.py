@@ -17,6 +17,7 @@ from pygame.math import Vector2
 import argparse
 from emoji import EMOJI_DATA
 import struct
+from typing import Tuple, List, Any
 
 
 import speech_recognition as sr
@@ -161,9 +162,10 @@ def main():
         pygame.display.update()
         # clock.tick(60)
 
+        history: List[Tuple[str, str]] = []
         while True:
             textValid = False
-            text = ""
+            recText = ""
             while not textValid:
                 recordDone = False
                 recordStart = False
@@ -194,7 +196,7 @@ def main():
                     audio = r.record(source)
 
                     try:
-                        text = r.recognize_sphinx(audio)
+                        recText = r.recognize_sphinx(audio)
                         textValid = True
                     except sr.UnknownValueError:
                         print("Could not understand the audio, please try again")
@@ -202,14 +204,22 @@ def main():
                         print("Could not request results; {0}".format(e))
                         return
 
-            print("You: ", text)
+            print("You: ", recText)
+
+            messages: Any = [
+                {"role": "system", "content": roleTxt},
+            ]
+
+            for (prompt, response) in history:
+                messages.append({"role": "user", "content": prompt})
+                messages.append({"role": "assistant", "content": response})
+
+            messages.append({"role": "user", "content": recText})
+
             # return
             stream = client.chat.completions.create(
                 model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": roleTxt},
-                    {"role": "user", "content": text},
-                ],
+                messages=messages,
                 max_tokens=5000,
                 stream=True
             )
@@ -222,6 +232,8 @@ def main():
                     print(chunk.choices[0].delta.content, end="")
                     text += "".join([char if not char in UNICODE_EMOJI else "" for char in
                                     chunk.choices[0].delta.content])
+
+            history.append((recText, text))
 
             print("\n")
 
