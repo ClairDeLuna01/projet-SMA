@@ -191,7 +191,8 @@ def main():
                     wf.setparams((1, 2, 16000, 512, "NONE", "NONE"))
 
                     # noise reduction
-                    reduced_audio = nr.reduce_noise(y=audio, sr=16000)
+                    reduced_audio = nr.reduce_noise(
+                        y=audio, sr=16000).astype(np.int16)
 
                     data = struct.pack(
                         "h" * len(reduced_audio), *reduced_audio)
