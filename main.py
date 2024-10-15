@@ -21,6 +21,7 @@ from typing import Tuple, List, Any
 
 
 import speech_recognition as sr
+import noisereduce as nr
 from pocketsphinx import LiveSpeech
 
 from pvrecorder import PvRecorder
@@ -33,7 +34,6 @@ UNICODE_EMOJI = [char for char in EMOJI_DATA.keys()]
 
 ORG_ID = "org-31SsoJLpPeWzY8jO008WwdEM"
 PROJECT_ID = "proj_Wshgz8vbsWv9vT5k9gzVWIO1"
-KEY = "sk-AO-M1SvYT_H2Z0MYg-j7Kh0b2cw25dySMuTpCpFuCET3BlbkFJ7uiV5j9SkK5pu1VHLgvc_conEzQWaTggH-UhhA3isA"
 
 ROLE: str = """You are a storyteller/game master, your job is telling stories to a young child in order to grow their curiosity and get them to have fun!
 you follow the following rules:
@@ -57,8 +57,7 @@ def main():
     try:
         client = OpenAI(
             organization=ORG_ID,
-            project=PROJECT_ID,
-            api_key=KEY
+            project=PROJECT_ID
         )
 
         parser = argparse.ArgumentParser(description="Storytelling AI")
@@ -101,10 +100,10 @@ def main():
         # for phrase in LiveSpeech():
         #     print(phrase)
 
-        # for index, device in enumerate(PvRecorder.get_available_devices()):
-        #     print(f"{index}: {device}")
+        for index, device in enumerate(PvRecorder.get_available_devices()):
+            print(f"{index}: {device}")
 
-        device_index = 0
+        device_index = 7
 
         recorder = PvRecorder(device_index=device_index, frame_length=512)
         # audio = []
@@ -138,7 +137,7 @@ def main():
 
         pygame.init()
 
-        FACTOR = 0.5
+        FACTOR = 1.0
         SIZE = (1050 * FACTOR, 1050 * FACTOR)
         display = pygame.display.set_mode(SIZE)
         clock = pygame.time.Clock()
@@ -190,13 +189,19 @@ def main():
                 recorder.stop()
                 with wave.open("record.wav", 'w') as wf:
                     wf.setparams((1, 2, 16000, 512, "NONE", "NONE"))
-                    wf.writeframes(struct.pack("h" * len(audio), *audio))
+
+                    # noise reduction
+                    reduced_audio = nr.reduce_noise(y=audio, sr=16000)
+
+                    data = struct.pack(
+                        "h" * len(reduced_audio), *reduced_audio)
+                    wf.writeframes(data)
 
                 with sr.AudioFile("record.wav") as source:
                     audio = r.record(source)
 
                     try:
-                        recText = r.recognize_sphinx(audio)
+                        recText = r.recognize_sphinx(audio, language="fr-FR")
                         textValid = True
                     except sr.UnknownValueError:
                         print("Could not understand the audio, please try again")
@@ -204,7 +209,7 @@ def main():
                         print("Could not request results; {0}".format(e))
                         return
 
-            print("You: ", recText)
+            print("You:", recText)
 
             messages: Any = [
                 {"role": "system", "content": roleTxt},
